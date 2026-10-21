@@ -1,0 +1,31 @@
+Package: termr
+Title: Modern Reactive Terminal Applications with Data Workflows
+Version: 1.0.1
+Authors@R: 
+    person("Akims", "Mensikovs", email = "akimm7926@gmail.com",
+           role = c("aut", "cre", "cph"))
+Description: Build modern reactive terminal applications for data workflows
+    in R using reusable widgets, layouts, events, focus management and
+    themes. A virtual screen buffer and incremental rendering update changed
+    cells, while a headless driver supports deterministic application tests.
+    Includes data tables that render visible rows on demand, lazy table
+    sources, data inspection, SQL editing and background R workers with
+    progress and streamed output.
+    Optional database support and static text, Markdown, HTML, SVG and
+    JSON exports support analytical tools and reports without requiring an
+    interactive terminal for static output.
+License: MIT + file LICENSE
+URL: https://github.com/41929424/termr
+BugReports: https://github.com/41929424/termr/issues
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports: codetools, grDevices, R6, processx, ps, stats, utils
+Suggests: DBI, jsonlite, knitr, RSQLite, testthat (>= 3.0.0), withr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
+NeedsCompilation: no
+Packaged: 2026-10-09 12:17:59 UTC; User001
+Author: Akims Mensikovs [aut, cre, cph]
+Maintainer: Akims Mensikovs <akimm7926@gmail.com>
+Repository: CRAN
+Date/Publication: 2026-10-21 10:20:02 UTC

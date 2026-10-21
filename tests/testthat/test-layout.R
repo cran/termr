@@ -1,0 +1,121 @@
+regions_of <- function(widgets) {
+  lapply(widgets, function(w) unlist(unclass(w$region)))
+}
+
+test_that("distribute splits space exactly", {
+  expect_identical(distribute(c(1, 1, 1), 10), c(4L, 3L, 3L))
+  expect_identical(distribute(c(1, 2), 9), c(3L, 6L))
+  expect_identical(distribute(c(1, 1), 0), c(0L, 0L))
+  expect_identical(distribute(numeric(), 5), integer())
+})
+
+test_that("vertical layout stacks auto-height children", {
+  a <- label("one")
+  b <- label("two\nlines")
+  root <- vertical(a, b)
+  layout_tree(root, rect(1, 1, 20, 10))
+  expect_identical(regions_of(list(a, b)), list(
+    c(x = 1L, y = 1L, width = 3L, height = 1L),
+    c(x = 1L, y = 2L, width = 5L, height = 2L)
+  ))
+})
+
+test_that("fr children share the remaining height", {
+  top <- label("top")
+  a <- vertical(id = "a", style = style(height = "1fr"))
+  b <- vertical(id = "b", style = style(height = "2fr"))
+  root <- vertical(top, a, b)
+  layout_tree(root, rect(1, 1, 10, 10))
+  expect_identical(a$region$y, 2L)
+  expect_identical(a$region$height, 3L)
+  expect_identical(b$region$y, 5L)
+  expect_identical(b$region$height, 6L)
+})
+
+test_that("horizontal layout splits width between fixed, auto and fr", {
+  a <- label("abc")
+  b <- label("x", style = style(width = 5))
+  c <- label("y", style = style(width = "1fr"))
+  root <- horizontal(a, b, c)
+  layout_tree(root, rect(1, 1, 20, 3))
+  expect_identical(vapply(list(a, b, c), function(w) w$region$x, 1L), c(1L, 4L, 9L))
+  expect_identical(vapply(list(a, b, c), function(w) w$region$width, 1L), c(3L, 5L, 12L))
+  # The horizontal container is as tall as its tallest child.
+  expect_identical(natural_height(root, 20), 1L)
+})
+
+test_that("padding, border and margin shrink the content box", {
+  inner <- label("hi", style = style(margin = c(1, 2)))
+  box <- vertical(inner, style = style(border = "round", padding = c(0, 1)))
+  layout_tree(box, rect(1, 1, 20, 8))
+  expect_identical(unlist(unclass(inner$region)), c(x = 5L, y = 3L, width = 2L, height = 1L))
+})
+
+test_that("percent sizes and min/max limits are respected", {
+  a <- vertical(style = style(width = "50%", height = 2))
+  b <- vertical(style = style(height = "1fr", max_height = 3))
+  root <- vertical(a, b)
+  layout_tree(root, rect(1, 1, 30, 10))
+  expect_identical(a$region$width, 15L)
+  expect_identical(b$region$height, 3L)
+})
+
+test_that("align and valign position children inside a container", {
+  a <- label("abcd")
+  root <- vertical(a, style = style(align = "center", valign = "middle"))
+  layout_tree(root, rect(1, 1, 10, 5))
+  expect_identical(c(a$region$x, a$region$y), c(4L, 3L))
+})
+
+test_that("hidden widgets take no space", {
+  a <- label("a")
+  b <- label("b")
+  c <- label("c")
+  root <- vertical(a, b, c)
+  b$visible <- FALSE
+  layout_tree(root, rect(1, 1, 10, 5))
+  expect_null(b$region)
+  expect_identical(c$region$y, 2L)
+})
+
+test_that("auto sizes of nested containers are measured from children", {
+  row <- horizontal(label("ab"), label("cdef"))
+  col <- vertical(row, label("x\ny\nz"), style = style(width = "auto", height = "auto"))
+  expect_identical(natural_width(col), 6L)
+  expect_identical(natural_height(col, 6L), 4L)
+})
+
+test_that("custom layout registration is namespaced and removable", {
+  arrange <- function(children, inner, parent_style) {
+    lapply(seq_along(children), function(i) region(inner$x, inner$y + i - 1L, inner$width, 1L))
+  }
+  measure <- function(children, parent_style) list(width = function() 4L, height = function(width) length(children))
+  expect_error(register_layout("vertical", arrange, measure), "custom_")
+  register_layout("custom_stack", arrange, measure)
+  on.exit(unregister_layout("custom_stack"), add = TRUE)
+  expect_error(register_layout("custom_stack", arrange, measure), "already registered")
+  root <- vertical(label("a"), label("b"), style = style(layout = "custom_stack"))
+  buf <- render_widget(root, 8, 3)
+  expect_match(buf$to_text()[[1]], "a")
+  expect_match(buf$to_text()[[2]], "b")
+  expect_true(unregister_layout("custom_stack"))
+  expect_error(style(layout = "custom_stack"), "must be one of")
+})
+
+test_that("register_layout(replace = TRUE) replaces a custom layout on purpose", {
+  measure <- function(children, parent_style) list(width = function() 1L, height = function(width) length(children))
+  one_row <- function(children, inner, parent_style) {
+    lapply(seq_along(children), function(i) region(inner$x, inner$y + i - 1L, inner$width, 1L))
+  }
+  two_rows <- function(children, inner, parent_style) {
+    lapply(seq_along(children), function(i) region(inner$x, inner$y + 2L * (i - 1L), inner$width, 1L))
+  }
+  register_layout("custom_reload", one_row, measure)
+  on.exit(unregister_layout("custom_reload"), add = TRUE)
+  expect_error(register_layout("custom_reload", two_rows, measure), "replace = TRUE")
+  expect_identical(register_layout("custom_reload", two_rows, measure, replace = TRUE), "custom_reload")
+  box <- vertical(label("a"), label("b"), style = style(layout = "custom_reload"))
+  expect_identical(render_lines(box, 3, 3), c("a", "", "b"))
+  expect_error(register_layout("vertical", one_row, measure, replace = TRUE), "custom_")
+  expect_error(register_layout("custom_reload", one_row, measure, replace = NA), "replace")
+})
